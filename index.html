@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>أقرب وظيفة شاغرة – محافظة الرس</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #fff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --green: #059669;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--text);
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 18px 16px 50px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0 0 6px; }
+    p { margin: 0; color: var(--muted); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #d1d5db;
+      font: inherit;
+      background: #fff;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 9px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .status { font-size: 13px; margin-top: 10px; }
+    .ok { color: #047857; }
+    .err { color: #b91c1c; }
+    .loc-box {
+      background: #f9fafb;
+      border: 1px dashed #d1d5db;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    @media (min-width: 900px) {
+      .layout {
+        display: grid;
+        grid-template-columns: 1.1fr .9fr;
+        gap: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>أقرب وظيفة لك – محافظة الرس</h1>
+      <p>الرجاء تحديد موقعك لوجود أقرب وظيفة شاغرة.</p>
+    </header>
+
+    <div class="layout">
+      <!-- خيارات التوظيف -->
+      <div class="card">
+        <h2 style="margin-top:0;">خيارات التوظيف</h2>
+        <div>
+          <label for="jobField">المجال المرغوب</label>
+          <select id="jobField">
+            <option value="">اختر...</option>
+            <option value="ادارية">وظائف إدارية</option>
+            <option value="مبيعات">مبيعات / كاشير</option>
+            <option value="سائق">سائق / توصيل</option>
+            <option value="محاسبة">محاسبة</option>
+            <option value="تقنية">تقنية / دعم فني</option>
+          </select>
+        </div>
+        <div style="margin-top:10px;">
+          <label for="notes">ملاحظات</label>
+          <textarea id="notes" rows="3" placeholder="اكتب حيّك – الراتب المتوقع – خبرتك..."></textarea>
+        </div>
+        <p class="status" id="form-status" style="display:none;"></p>
+        <button class="btn" id="sendFormBtn" style="margin-top:12px;">إرسال الطلب</button>
+      </div>
+
+      <!-- تحديد الموقع -->
+      <div class="card">
+        <h2 style="margin-top:0;">📍 موقعك</h2>
+        <p id="loc-text" class="status">لم يتم تحديد الموقع بعد.</p>
+        <button class="btn" id="locBtn">📍 تحديد موقعي الآن</button>
+        <div id="loc-box" class="loc-box" style="display:none;"></div>
+        <p class="status" style="font-size:12px;color:#6b7280;margin-top:10px;">
+          * سيتم إرسال الإحداثيات مباشرة إلى لوحة المشرف (الإيميل) للبحث عن أقرب وظيفة لك.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // لو سيرفرك في مكان ثاني غيّر هذا
+    const API_BASE = "http://localhost:3001";
+
+    const locBtn = document.getElementById("locBtn");
+    const locText = document.getElementById("loc-text");
+    const locBox = document.getElementById("loc-box");
+    const sendFormBtn = document.getElementById("sendFormBtn");
+    const formStatus = document.getElementById("form-status");
+
+    let userCoords = null;
+
+    // يرسل الإحداثيات مباشرة إلى السيرفر -> السيرفر يرسلها إيميل
+    async function sendLocationEmail(coords) {
+      try {
+        await fetch(API_BASE + "/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lat: coords.lat,
+            lng: coords.lng,
+            accuracy: coords.accuracy,
+            ts: new Date().toISOString(),
+            from: "location-only"
+          })
+        });
+      } catch (e) {
+        console.log("send email error", e);
+      }
+    }
+
+    function askLocation() {
+      if (!("geolocation" in navigator)) {
+        locText.textContent = "المتصفح لا يدعم تحديد الموقع.";
+        locText.className = "status err";
+        return;
+      }
+      locText.textContent = "جارِ تحديد موقعك...";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userCoords = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          };
+          locText.textContent = "تم تحديد موقعك ✅ وتم إرسال الإحداثيات.";
+          locText.className = "status ok";
+          locBox.style.display = "block";
+          locBox.innerHTML = `
+            الإحداثيات:<br>
+            Latitude: ${userCoords.lat.toFixed(6)}<br>
+            Longitude: ${userCoords.lng.toFixed(6)}<br>
+            الدقة: ~${Math.round(userCoords.accuracy)} متر
+          `;
+          // هنا الإرسال الفعلي للإيميل
+          sendLocationEmail(userCoords);
+        },
+        (err) => {
+          locText.textContent = err.message || "تعذّر تحديد الموقع.";
+          locText.className = "status err";
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000
+        }
+      );
+    }
+
+    // إرسال نموذج التوظيف (اختياري) مع الموقع لو موجود
+    async function sendForm() {
+      const jobField = document.getElementById("jobField").value;
+      const notes = document.getElementById("notes").value;
+
+      formStatus.style.display = "block";
+      formStatus.textContent = "جارِ الإرسال...";
+      formStatus.className = "status";
+      sendFormBtn.disabled = true;
+
+      try {
+        await fetch(API_BASE + "/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobField,
+            notes,
+            lat: userCoords ? userCoords.lat : null,
+            lng: userCoords ? userCoords.lng : null,
+            accuracy: userCoords ? userCoords.accuracy : null,
+            ts: new Date().toISOString(),
+            from: "job-form"
+          })
+        });
+        formStatus.textContent = "تم إرسال معلوماتك بنجاح ✅";
+        formStatus.className = "status ok";
+      } catch (e) {
+        formStatus.textContent = "تعذّر الإرسال، تأكد أن السيرفر شغّال.";
+        formStatus.className = "status err";
+      } finally {
+        sendFormBtn.disabled = false;
+      }
+    }
+
+    locBtn.addEventListener("click", askLocation);
+    sendFormBtn.addEventListener("click", sendForm);
+  </script>
+</body>
+</html>
